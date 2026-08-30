@@ -64,10 +64,25 @@ export interface Todo {
   createdAt: string
 }
 
-/** 键值设置（PIN hash/salt 等） */
+/** 键值设置（PIN hash/salt、lastBackupAt 等） */
 export interface Setting {
   key: string
   value: string
+}
+
+/** 内部快照：每天首次打开时自动生成的全量数据副本，照片直接存 Blob，仅保留最近 1 份 */
+export interface Snapshot {
+  id?: number
+  createdAt: string // 本地时间 yyyy-MM-ddTHH:mm:ss
+  data: {
+    events: PandaEvent[]
+    diaries: Diary[]
+    thoughts: Thought[]
+    transactions: Transaction[]
+    categories: Category[]
+    todos: Todo[]
+    settings: Setting[]
+  }
 }
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id'>[] = [
@@ -94,6 +109,7 @@ class PandaDB extends Dexie {
   categories!: Table<Category, number>
   todos!: Table<Todo, number>
   settings!: Table<Setting, string>
+  snapshots!: Table<Snapshot, number>
 
   constructor() {
     super('panda-db')
@@ -111,6 +127,10 @@ class PandaDB extends Dexie {
     // 首次创建数据库时预置常用分类
     this.on('populate', (tx) => {
       tx.table('categories').bulkAdd(DEFAULT_CATEGORIES)
+    })
+    // v2：新增内部快照表（仅列出新增/变化的表，无旧数据需迁移）
+    this.version(2).stores({
+      snapshots: '++id, createdAt',
     })
   }
 }

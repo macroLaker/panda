@@ -1,6 +1,9 @@
-import { db } from '../db/db'
+import { db, setSetting } from '../db/db'
 import type { Category, Diary, PandaEvent, Setting, Thought, Todo, Transaction } from '../db/db'
-import { todayStr } from './date'
+import { nowISO, todayStr } from './date'
+
+/** settings 表里记录最近一次全量 JSON 备份完成时间的 key */
+export const LAST_BACKUP_KEY = 'lastBackupAt'
 
 /** 备份文件里的日记：照片转成 dataURL 字符串 */
 type DiaryExport = Omit<Diary, 'photos'> & { photos: string[] }
@@ -50,17 +53,18 @@ function dataURLToBlob(dataURL: string): Blob {
  *    必须在用户点击手势的同步/近同步调用链中触发，用户取消（AbortError）不算失败
  * 2. a[download] + objectURL：常规浏览器下载
  * 3. 都不可用时给出中文提示
+ * @returns 是否实际完成导出（share 成功 / 触发下载 = true；用户取消分享或环境不支持 = false）
  */
-export async function exportFile(blob: Blob, filename: string): Promise<void> {
+export async function exportFile(blob: Blob, filename: string): Promise<boolean> {
   if (typeof navigator.canShare === 'function' && typeof navigator.share === 'function') {
     const file = new File([blob], filename, { type: blob.type })
     if (navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file] })
-        return
+        return true
       } catch (err) {
-        // 用户取消分享不算失败，静默忽略
-        if (err instanceof DOMException && err.name === 'AbortError') return
+        // 用户取消分享不算失败，静默忽略，但也不算完成
+        if (err instanceof DOMException && err.name === 'AbortError') return false
         // 其他异常继续走下载降级
       }
     }
@@ -72,13 +76,17 @@ export async function exportFile(blob: Blob, filename: string): Promise<void> {
     a.download = filename
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 3000)
-    return
+    return true
   }
   window.alert('当前环境不支持导出文件，请在 Safari 浏览器标签页中打开本应用后再导出。')
+  return false
 }
 
-/** 导出全量 JSON 备份（照片以 base64 内嵌） */
-export async function exportBackup(): Promise<void> {
+/**
+ * 导出全量 JSON 备份（照片以 base64 内嵌）；实际完成时更新 lastBackupAt
+ * @returns 是否实际完成导出
+ */
+export async function exportBackup(): Promise<boolean> {
   const [events, diaries, thoughts, transactions, categories, todos, settings] = await Promise.all([
     db.events.toArray(),
     db.diaries.toArray(),
@@ -101,7 +109,9 @@ export async function exportBackup(): Promise<void> {
     data: { events, diaries: diariesOut, thoughts, transactions, categories, todos, settings },
   }
   const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' })
-  await exportFile(blob, `panda-backup-${todayStr()}.json`)
+  const done = await exportFile(blob, `panda-backup-${todayStr()}.json`)
+  if (done) await setSetting(LAST_BACKUP_KEY, nowISO())
+  return done
 }
 
 /** 导入 JSON 备份，覆盖当前全部数据 */

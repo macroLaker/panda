@@ -1490,6 +1490,34 @@ img {
   color: var(--ink);
 }
 
+/* ---------- 备份提醒条 ---------- */
+.backup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: var(--shadow);
+  animation: page-in 0.34s ease both;
+}
+
+.backup-banner-text {
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.backup-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* ---------- 动效偏好 ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,

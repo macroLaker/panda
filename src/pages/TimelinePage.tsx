@@ -7,6 +7,7 @@ import { fmtDayHeader } from '../utils/date'
 import TimelineCard from '../components/TimelineCard'
 import CalendarView from '../components/CalendarView'
 import DetailSheet from '../components/DetailSheet'
+import BackupReminder from '../components/BackupReminder'
 import Sheet from '../components/Sheet'
 import EventForm from '../components/forms/EventForm'
 import DiaryForm from '../components/forms/DiaryForm'
@@ -105,6 +106,8 @@ export default function TimelinePage() {
 
   return (
     <div className="page page-timeline">
+      <BackupReminder />
+
       <header className="page-head">
         <h1 className="page-title">时间线</h1>
         <button

@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import PinLock from './components/PinLock'
 import { getSetting } from './db/db'
 import { PIN_HASH_KEY, SESSION_UNLOCK_KEY } from './utils/pin'
+import { maybeCreateDailySnapshot } from './utils/snapshot'
 import TimelinePage from './pages/TimelinePage'
 import AccountingPage from './pages/AccountingPage'
 import TodosPage from './pages/TodosPage'
@@ -23,6 +24,11 @@ export default function App() {
       cancelled = true
     }
   }, [])
+
+  // 进入应用后（解锁完成）后台生成每日内部快照，失败静默
+  useEffect(() => {
+    if (locked === false) void maybeCreateDailySnapshot()
+  }, [locked])
 
   if (locked === null) {
     return <div className="boot-splash">🐼</div>

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, removeSetting, setSetting } from '../db/db'
 import { exportBackup, exportTransactionsCSV, importBackup } from '../utils/backup'
+import { getLatestSnapshot, restoreSnapshot } from '../utils/snapshot'
 import { genSalt, hashPin, PIN_HASH_KEY, PIN_SALT_KEY, SESSION_UNLOCK_KEY } from '../utils/pin'
 import Sheet from '../components/Sheet'
 import PinPad from '../components/PinPad'
@@ -114,11 +115,14 @@ export default function SettingsPage() {
   const importRef = useRef<HTMLInputElement>(null)
 
   const pinEnabled = useLiveQuery(async () => !!(await db.settings.get(PIN_HASH_KEY)), []) ?? false
+  const latestSnapshot = useLiveQuery(getLatestSnapshot, [])
 
   const handleExport = async () => {
     setBusy('export')
     try {
-      await exportBackup()
+      const done = await exportBackup()
+      // 用户取消分享等未实际完成时轻提示，不静默
+      if (!done) window.alert('本次未完成备份，如需备份请重新导出。')
     } catch (err) {
       window.alert(`导出失败：${err instanceof Error ? err.message : '未知错误'}`)
     } finally {
@@ -141,6 +145,24 @@ export default function SettingsPage() {
       window.alert(
         `导入失败：${err instanceof Error ? err.message : '未知错误'}\n若设备存储空间已满也会导致导入失败，请清理空间后重试。`,
       )
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const handleRestoreSnapshot = async () => {
+    if (!latestSnapshot) return
+    const timeLabel = latestSnapshot.createdAt.slice(0, 16).replace('T', ' ')
+    if (!window.confirm(`从内部快照恢复：当前数据将被 ${timeLabel} 的快照完全替换，确定继续吗？`)) return
+    if (!window.confirm(`再次确认：${timeLabel} 之后的改动将全部丢失且无法找回，是否恢复？`)) return
+    setBusy('restore')
+    try {
+      await restoreSnapshot(latestSnapshot)
+      window.alert('恢复成功，应用将重新加载')
+      sessionStorage.removeItem(SESSION_UNLOCK_KEY)
+      window.location.reload()
+    } catch (err) {
+      window.alert(`恢复失败：${err instanceof Error ? err.message : '未知错误'}`)
     } finally {
       setBusy('')
     }
@@ -204,6 +226,26 @@ export default function SettingsPage() {
         </button>
         <p className="settings-note">
           📱 iOS 上导出会弹出系统分享面板，选择「存储到文件」即可保存到本机。
+        </p>
+      </section>
+
+      <section className="settings-group">
+        <h3 className="settings-group-title">内部快照</h3>
+        <div className="settings-row is-static">
+          <span>最近快照</span>
+          <small>{latestSnapshot ? latestSnapshot.createdAt.slice(0, 16).replace('T', ' ') : '暂无'}</small>
+        </div>
+        <button
+          type="button"
+          className="settings-row"
+          disabled={busy !== '' || !latestSnapshot}
+          onClick={handleRestoreSnapshot}
+        >
+          <span>⏪ 从快照恢复（覆盖当前数据）</span>
+          <i>{busy === 'restore' ? '…' : '›'}</i>
+        </button>
+        <p className="settings-note">
+          快照每天首次打开时自动生成一份，存于本机浏览器数据内，可用于回滚误删；但它不能替代导出备份——清除 Safari（浏览器）网站数据时快照会一同丢失。若此处长时间显示「暂无」或时间一直不更新，可能是设备存储空间不足，建议先导出 JSON 备份再清理部分照片。
         </p>
       </section>
 
